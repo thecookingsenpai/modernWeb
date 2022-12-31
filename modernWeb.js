@@ -7,6 +7,7 @@
 
 const keccak256 = require('js-sha3') 
 const ethers = require('ethers');
+const forge = require("node-forge")
 
 // Functions
 async function verifySignature(message, address, signature) {
@@ -79,6 +80,60 @@ async function verifySignature(message, address, signature) {
   
   // SECTION Streamable responses
 
+  function randomString(length, chars='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+    var result = '';
+    for (var i = length; i > 0; --i) result += chars[Math.floor(Math.random() * chars.length)];
+    return result;
+  }
+
+
+// SECTION Encrypt and Decrypt
+
+/* INFO
+ * The sender encrypt the message with the receiver publicKey
+ * The receiver decrypt the message with his privateKey
+*/
+// SECTION Key generation
+async function generateKeys(signature) {
+  // Generating keys deterministically so that they will always be the same
+  const md = forge.md.sha256.create();
+  md.update(signature);
+  const seed = md.digest().toHex();
+  console.log("Deterministic seed:" + seed)
+  // Rigged prng
+  const prng = forge.random.createInstance()
+  prng.seedFileSync = () => seed
+  // Deterministic key generation
+  const { privateKey, publicKey } = forge.pki.rsa.generateKeyPair({ bits: 4096, prng })
+  console.log(privateKey)
+  console.log("Private key: " + JSON.stringify(privateKey))
+  console.log("Public key: " + JSON.stringify(publicKey))
+  // Testing enc/dec
+  var enc = await encryptMessage("Hello")
+  var mess = await decryptMessage(enc)
+  if (mess==="Hello") {
+      console.log("Encryption methods are ready")
+  } else {
+      console.log("ERROR: Encryption methods does not work!")
+  }
+  return { privateKey, publicKey }
+}
+// !SECTION Key generation
+
+async function encryptMessage(message, publicMessagingKey) {
+  const encrypted = publicMessagingKey.encrypt(message)
+  console.log("encrypted:", forge.util.encode64(encrypted));
+  return encrypted
+}
+
+async function decryptMessage(encryptedMessage, privateMessagingKey) {
+  const decrypted = privateMessagingKey.decrypt(encryptedMessage);
+  console.log("decrypted:", decrypted);
+  return decrypted
+}
+
+// !SECTION Encrypt and Decrypt
+
 // ANCHOR Exporting everything
 module.exports = {
     verifySignature: verifySignature,
@@ -86,5 +141,9 @@ module.exports = {
     convertObjectToBinary: convertObjectToBinary,
     convertBinaryToObject: convertBinaryToObject,
     resStreamString: resStreamString,
-    resStreamObject: resStreamObject
+    resStreamObject: resStreamObject,
+    randomString: randomString,
+    generateKeys: generateKeys,
+    encryptMessage: encryptMessage,
+    decryptMessage: decryptMessage
 }

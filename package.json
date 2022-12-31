@@ -1,6 +1,6 @@
 {
-  "name": "modern-web",
-  "version": "1.0.0",
+  "name": "@blockdrops/modern-web",
+  "version": "1.0.3",
   "description": "Modern methods for modern apps",
   "main": "modernWeb.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "dapp"
   ],
   "author": "thecookingsenpai",
+  "repository": "https://github.com/thecookingsenpai/modernWeb",
   "license": "ISC",
   "devDependencies": {
     "ethers": "^5.7.2",
