@@ -5,14 +5,35 @@
  * LINK https://stackoverflow.com/questions/25713735/how-to-convert-object-to-binary-string
 */
 
-const keccak256 = require('js-sha3') 
+const sha3= require('js-sha3')
+const keccak256 = sha3.keccak256;
 const ethers = require('ethers');
 const forge = require("node-forge")
+var privateMessagingKey;
+var publicMessagingKey;
+var privateMessagingKeyPem;
+var publicMessagingKeyPem;
 
 // Functions
+
+async function getPublicMessagingKey() {
+    return publicMessagingKey;
+}
+
+async function getPublicMessagingKeyPem() {
+    return publicMessagingKeyPem;
+}
+
+async function signMessage(message, wallet) {
+    const messageHash = keccak256(message);
+    const signature = await wallet.signMessage(messageHash);
+    return signature;
+}
+
 async function verifySignature(message, address, signature) {
     console.log("Verifying " + message + " on " + address + " with signature " + signature)
-    const recoveredAddress = ethers.utils.verifyMessage(message, signature);
+    const messageHash = keccak256(message);
+    const recoveredAddress = ethers.utils.verifyMessage(messageHash, signature);
     console.log("Recovered address: " + recoveredAddress)
     return recoveredAddress === address;
   }
@@ -39,7 +60,8 @@ async function verifySignature(message, address, signature) {
         binCode.push(String.fromCharCode(parseInt(newBin[i], 2)));
     }
     let jsonString = binCode.join("");
-    return JSON.parse(jsonString)
+    let jsonObject = JSON.parse(jsonString)
+    return  jsonObject
   }
   
   // SECTION Streamable responses
@@ -98,17 +120,22 @@ async function generateKeys(signature) {
   // Generating keys deterministically so that they will always be the same
   const md = forge.md.sha256.create();
   md.update(signature);
-  const seed = md.digest().toHex();
-  console.log("Deterministic seed:" + seed)
+  // Not outputting the seed, of course
+  let seed = md.digest().toHex();
+  console.log("Deterministic seed generated")
   // Rigged prng
   const prng = forge.random.createInstance()
   prng.seedFileSync = () => seed
   // Deterministic key generation
-  const { privateKey, publicKey } = forge.pki.rsa.generateKeyPair({ bits: 4096, prng })
-  console.log(privateKey)
-  console.log("Private key: " + JSON.stringify(privateKey))
-  console.log("Public key: " + JSON.stringify(publicKey))
+  var { privateKey, publicKey} = forge.pki.rsa.generateKeyPair({ bits: 4096, prng })
+  // console.log(privateKey)
+  // console.log("Private key: " + JSON.stringify(privateKey))
+  // console.log("Public key: " + JSON.stringify(publicKey))
   // Testing enc/dec
+  privateMessagingKey = privateKey
+  privateMessagingKeyPem = forge.pki.privateKeyToPem(privateKey)
+  publicMessagingKey = publicKey
+  publicMessagingKeyPem = forge.pki.publicKeyToPem(publicKey)
   var enc = await encryptMessage("Hello")
   var mess = await decryptMessage(enc)
   if (mess==="Hello") {
@@ -116,18 +143,64 @@ async function generateKeys(signature) {
   } else {
       console.log("ERROR: Encryption methods does not work!")
   }
-  return { privateKey, publicKey }
+  // Testing sign/verify
+  var signature = await RSASignature("Hello")
+  var verified = await verifyRSASignature("Hello", signature)
+  if (verified) {
+      console.log("Signature methods are ready")
+  } else {
+      console.log("ERROR: Signature methods does not work!")
+  }
+  // Testing pem conversion
+  var pem = forge.pki.publicKeyToPem(publicKey)
+  console.log(pem)
+  var publicKey2 = forge.pki.publicKeyFromPem(pem)
+  var enc = await encryptMessage("Hello", publicKey2)
+  var mess = await decryptMessage(enc)
+  if (mess==="Hello") {
+      console.log("Pem conversion methods are ready")
+  } else {
+      console.log("ERROR: Pem conversion methods does not work!")
+  }
+  return true
 }
 // !SECTION Key generation
 
-async function encryptMessage(message, publicMessagingKey) {
-  const encrypted = publicMessagingKey.encrypt(message)
+// NOTE Sign and Verify
+
+async function RSASignature(message, privateKey=privateMessagingKey) {
+  const md = forge.md.sha256.create();
+  md.update(message);
+  const signature = privateKey.sign(md);
+  console.log("signature:", forge.util.encode64(signature));
+  return signature
+}
+
+async function verifyRSASignature(message, signature, publicKey=publicMessagingKey) {
+  try {
+    publicKey = forge.pki.publicKeyFromPem(publicKey)
+    console.log("INFO: publicKey is a pem public key, converting...")
+  } catch (error) {
+    console.log(error)
+    console.log("INFO: publicKey could already be a forge public key")
+  }
+  const md = forge.md.sha256.create();
+  md.update(message);
+  const verified = publicKey.verify(md.digest().bytes(), signature);
+  console.log("verified:", verified);
+  return verified
+}
+
+// NOTE Encrypt and Decrypt
+
+async function encryptMessage(message, publicKey=publicMessagingKey) {
+  const encrypted = publicKey.encrypt(message)
   console.log("encrypted:", forge.util.encode64(encrypted));
   return encrypted
 }
 
-async function decryptMessage(encryptedMessage, privateMessagingKey) {
-  const decrypted = privateMessagingKey.decrypt(encryptedMessage);
+async function decryptMessage(encryptedMessage, privateKey=privateMessagingKey) {
+  const decrypted = privateKey.decrypt(encryptedMessage);
   console.log("decrypted:", decrypted);
   return decrypted
 }
@@ -136,6 +209,11 @@ async function decryptMessage(encryptedMessage, privateMessagingKey) {
 
 // ANCHOR Exporting everything
 module.exports = {
+    publicMessagingKey: getPublicMessagingKey,
+    publicMessagingKeyPem: getPublicMessagingKeyPem,
+    publicKeyToPem: forge.pki.publicKeyToPem,
+    publicKeyFromPem: forge.pki.publicKeyFromPem,
+    signMessage: signMessage,
     verifySignature: verifySignature,
     hashMessage: hashMessage,
     convertObjectToBinary: convertObjectToBinary,
@@ -145,5 +223,9 @@ module.exports = {
     randomString: randomString,
     generateKeys: generateKeys,
     encryptMessage: encryptMessage,
-    decryptMessage: decryptMessage
+    decryptMessage: decryptMessage,
+    RSASignature: RSASignature,
+    verifyRSASignature: verifyRSASignature,
+    decode64: forge.util.decode64,
+    encode64: forge.util.encode64
 }
