@@ -1,4 +1,8 @@
 
-node_modules/
+browser version/node_modules/
 
-package-lock.json
+browser version/package-lock.json
+
+node version/node_modules/
+
+node version/package-lock.json
