@@ -98,7 +98,7 @@ async function verifySignature(message, address, signature) {
     // Use the above function to stream the binary
     resStreamString(res, binary, bytes)
     return true
-  }
+  } 
   
   // SECTION Streamable responses
 
