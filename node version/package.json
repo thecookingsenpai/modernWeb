@@ -1,6 +1,6 @@
 {
   "name": "@blockdrops/modern-web",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Modern methods for modern apps",
   "main": "modernWeb.js",
   "scripts": {
